@@ -1,0 +1,45 @@
+name: Daily Inventory Sync
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Daily at midnight UTC
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install openpyxl
+          curl https://rclone.org/install.sh | sudo bash
+      
+      - name: Setup GitHub CLI
+        run: |
+          gh auth login --with-token <<< "${{ secrets.GH_TOKEN }}"
+      
+      - name: Setup rclone config
+        run: |
+          mkdir -p ~/.config/rclone
+          echo "${{ secrets.RCLONE_CONFIG }}" > ~/.config/rclone/rclone.conf
+      
+      - name: Run sync
+        run: python scripts/sync.py
+        env:
+          RCLONE_CONFIG: ~/.config/rclone/rclone.conf
+      
+      - name: Commit audit log
+        run: |
+          git config user.name "Infinity Bot"
+          git config user.email "bot@infinityxone.com"
+          git add -A
+          git commit -m "Sync: $(date -u +%Y-%m-%d)" || true
+          git push
